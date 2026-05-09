@@ -1,26 +1,22 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { StudyChat } from "@/components/study-chat";
 
 export const Route = createFileRoute("/")({
   component: Index,
 });
 
-// IMPORTANT: Replace this placeholder. For sites with multiple pages (About, Services, Contact, etc.),
-// create separate route files (about.tsx, services.tsx, contact.tsx) — don't put all pages in this file.
-function PlaceholderIndex() {
+function Index() {
   return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
-    >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
-      />
+    <div className="mx-auto max-w-6xl space-y-8">
+      <div className="space-y-2">
+        <h1 className="bg-gradient-primary bg-clip-text text-4xl font-bold tracking-tight text-transparent md:text-5xl">
+          Hey, ready to learn?
+        </h1>
+        <p className="text-muted-foreground">
+          Ask anything — get an explanation, short notes, and a quick quiz instantly.
+        </p>
+      </div>
+      <StudyChat />
     </div>
   );
-}
-
-function Index() {
-  return <PlaceholderIndex />;
 }
