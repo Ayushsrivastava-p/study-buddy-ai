@@ -59,6 +59,10 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --background-image-gradient-primary: var(--gradient-primary);
+  --background-image-gradient-card: var(--gradient-card);
+  --shadow-soft: var(--shadow-soft);
+  --shadow-glow: var(--shadow-glow);
 }
 
 :root {
