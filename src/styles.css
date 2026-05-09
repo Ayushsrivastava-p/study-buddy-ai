@@ -102,8 +102,12 @@
 }
 
 .dark {
-  --background: oklch(0.129 0.042 264.695);
-  --foreground: oklch(0.984 0.003 247.858);
+  --background: oklch(0.16 0.03 270);
+  --foreground: oklch(0.97 0.01 270);
+  --gradient-primary: linear-gradient(135deg, oklch(0.6 0.24 285), oklch(0.65 0.2 200));
+  --gradient-card: linear-gradient(135deg, oklch(0.22 0.04 270), oklch(0.2 0.05 260));
+  --shadow-soft: 0 10px 30px -12px oklch(0 0 0 / 0.5);
+  --shadow-glow: 0 0 50px oklch(0.6 0.25 285 / 0.4);
   --card: oklch(0.208 0.042 265.755);
   --card-foreground: oklch(0.984 0.003 247.858);
   --popover: oklch(0.208 0.042 265.755);
