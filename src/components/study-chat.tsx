@@ -1,16 +1,28 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Sparkles, BookOpen, FileText, HelpCircle, Send, Loader2 } from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Sparkles, BookOpen, FileText, HelpCircle, Send, Loader2,
+  History, Trash2, MessageSquare,
+} from "lucide-react";
 
 const API_URL = "http://localhost:5678/webhook/study-buddy";
+const STORAGE_KEY = "study-buddy-history";
 
 type AIResult = {
   explanation?: string;
   notes?: string[] | string;
   quiz?: { question: string; answer?: string; options?: string[] }[] | string;
   raw?: string;
+};
+
+type HistoryEntry = {
+  id: string;
+  question: string;
+  result: AIResult;
+  createdAt: number;
 };
 
 function parseResult(data: unknown): AIResult {
@@ -27,17 +39,37 @@ function parseResult(data: unknown): AIResult {
   return {};
 }
 
+function formatTime(ts: number) {
+  const d = new Date(ts);
+  return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
 export function StudyChat() {
   const [question, setQuestion] = useState("");
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<AIResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [activeId, setActiveId] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as HistoryEntry[];
+        setHistory(parsed);
+        setActiveId(parsed[0]?.id ?? null);
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(history)); } catch { /* ignore */ }
+  }, [history]);
 
   const askAI = async () => {
     if (!question.trim()) return;
     setLoading(true);
     setError(null);
-    setResult(null);
     try {
       const res = await fetch(API_URL, {
         method: "POST",
@@ -48,7 +80,15 @@ export function StudyChat() {
       const text = await res.text();
       let data: unknown = text;
       try { data = JSON.parse(text); } catch { /* keep as string */ }
-      setResult(parseResult(data));
+      const entry: HistoryEntry = {
+        id: crypto.randomUUID(),
+        question: question.trim(),
+        result: parseResult(data),
+        createdAt: Date.now(),
+      };
+      setHistory((h) => [entry, ...h]);
+      setActiveId(entry.id);
+      setQuestion("");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong");
     } finally {
@@ -56,51 +96,128 @@ export function StudyChat() {
     }
   };
 
+  const active = history.find((h) => h.id === activeId) ?? null;
+
   return (
-    <div className="space-y-6">
-      <Card className="overflow-hidden border-0 bg-gradient-card shadow-soft">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-primary" />
-            Ask your AI Study Buddy
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <Textarea
-            value={question}
-            onChange={(e) => setQuestion(e.target.value)}
-            placeholder="e.g. Explain photosynthesis with a quick quiz…"
-            className="min-h-[110px] resize-none rounded-2xl border-border/50 bg-background/60"
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) askAI();
-            }}
-          />
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground">Tip: ⌘/Ctrl + Enter to send</span>
-            <Button
-              onClick={askAI}
-              disabled={loading || !question.trim()}
-              className="rounded-full bg-gradient-primary px-6 shadow-glow hover:opacity-90"
-            >
-              {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-              Ask AI
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {loading && <LoadingCards />}
-
-      {error && (
-        <Card className="border-destructive/40 bg-destructive/5">
-          <CardContent className="pt-6 text-sm text-destructive">
-            {error}. Make sure your endpoint at <code className="font-mono">{API_URL}</code> is running.
+    <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+      <div className="space-y-6 min-w-0">
+        <Card className="overflow-hidden border-0 bg-gradient-card shadow-soft">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-primary" />
+              Ask your AI Study Buddy
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Textarea
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+              placeholder="e.g. Explain photosynthesis with a quick quiz…"
+              className="min-h-[110px] resize-none rounded-2xl border-border/50 bg-background/60"
+              onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) askAI(); }}
+            />
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">Tip: ⌘/Ctrl + Enter to send</span>
+              <Button
+                onClick={askAI}
+                disabled={loading || !question.trim()}
+                className="rounded-full bg-gradient-primary px-6 shadow-glow hover:opacity-90"
+              >
+                {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                Ask AI
+              </Button>
+            </div>
           </CardContent>
         </Card>
-      )}
 
-      {result && !loading && <ResultCards result={result} />}
+        {loading && <LoadingCards />}
+
+        {error && (
+          <Card className="border-destructive/40 bg-destructive/5">
+            <CardContent className="pt-6 text-sm text-destructive">
+              {error}. Make sure your endpoint at <code className="font-mono">{API_URL}</code> is running.
+            </CardContent>
+          </Card>
+        )}
+
+        {active && !loading && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 rounded-2xl bg-primary/10 px-4 py-3 text-sm">
+              <MessageSquare className="h-4 w-4 shrink-0 text-primary" />
+              <span className="font-medium">{active.question}</span>
+              <span className="ml-auto text-xs text-muted-foreground">{formatTime(active.createdAt)}</span>
+            </div>
+            <ResultCards result={active.result} />
+          </div>
+        )}
+
+        {!active && !loading && !error && (
+          <Card className="border-dashed bg-transparent">
+            <CardContent className="flex flex-col items-center justify-center gap-2 py-12 text-center text-muted-foreground">
+              <Sparkles className="h-8 w-8 text-primary/60" />
+              <p className="text-sm">Ask your first question to get started.</p>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+
+      <HistoryPanel
+        history={history}
+        activeId={activeId}
+        onSelect={setActiveId}
+        onClear={() => { setHistory([]); setActiveId(null); }}
+      />
     </div>
+  );
+}
+
+function HistoryPanel({
+  history, activeId, onSelect, onClear,
+}: {
+  history: HistoryEntry[];
+  activeId: string | null;
+  onSelect: (id: string) => void;
+  onClear: () => void;
+}) {
+  return (
+    <Card className="border-0 bg-gradient-card shadow-soft lg:sticky lg:top-20 lg:h-[calc(100vh-7rem)]">
+      <CardHeader className="flex-row items-center justify-between space-y-0 pb-3">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <History className="h-4 w-4 text-primary" /> History
+        </CardTitle>
+        {history.length > 0 && (
+          <Button variant="ghost" size="icon" onClick={onClear} aria-label="Clear history" className="h-8 w-8">
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        )}
+      </CardHeader>
+      <CardContent className="p-0">
+        <ScrollArea className="h-[420px] lg:h-[calc(100vh-11rem)]">
+          <div className="space-y-2 px-4 pb-4">
+            {history.length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">
+                No past questions yet.
+              </p>
+            ) : (
+              history.map((h) => (
+                <button
+                  key={h.id}
+                  onClick={() => onSelect(h.id)}
+                  className={`w-full rounded-xl border p-3 text-left transition-all hover:border-primary/50 hover:bg-background/70 ${
+                    activeId === h.id
+                      ? "border-primary/60 bg-background shadow-soft"
+                      : "border-border/40 bg-background/40"
+                  }`}
+                >
+                  <p className="line-clamp-2 text-sm font-medium">{h.question}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{formatTime(h.createdAt)}</p>
+                </button>
+              ))
+            )}
+          </div>
+        </ScrollArea>
+      </CardContent>
+    </Card>
   );
 }
 
