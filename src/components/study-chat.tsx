@@ -70,11 +70,13 @@ export function StudyChat() {
     if (!question.trim()) return;
     setLoading(true);
     setError(null);
+    const userQuestion = question.trim();
     try {
       const res = await fetch(API_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question }),
+        mode: "cors",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ question: userQuestion }),
       });
       if (!res.ok) throw new Error(`Request failed: ${res.status}`);
       const text = await res.text();
@@ -82,7 +84,7 @@ export function StudyChat() {
       try { data = JSON.parse(text); } catch { /* keep as string */ }
       const entry: HistoryEntry = {
         id: crypto.randomUUID(),
-        question: question.trim(),
+        question: userQuestion,
         result: parseResult(data),
         createdAt: Date.now(),
       };
@@ -90,7 +92,8 @@ export function StudyChat() {
       setActiveId(entry.id);
       setQuestion("");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Something went wrong");
+      console.error("Study Buddy webhook error:", e);
+      setError("Failed to connect to AI assistant");
     } finally {
       setLoading(false);
     }
