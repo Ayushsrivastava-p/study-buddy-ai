@@ -8,7 +8,7 @@ import {
   History, Trash2, MessageSquare,
 } from "lucide-react";
 
-const API_URL = "http://localhost:5678/webhook/study-buddy";
+const API_URL = "http://localhost:5678/webhook-test/study-buddy";
 const STORAGE_KEY = "study-buddy-history";
 
 type AIResult = {
