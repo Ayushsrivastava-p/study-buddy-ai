@@ -31,9 +31,9 @@ function parseResult(data: unknown): AIResult {
     const d = data as Record<string, unknown>;
     return {
       explanation: (d.response as string) || (d.explanation as string) || (d.answer as string),
-      notes: d.notes as AIResult["notes"],
+      notes: (d.short_notes as AIResult["notes"]) ?? (d.notes as AIResult["notes"]),
       quiz: d.quiz as AIResult["quiz"],
-      raw: !d.response && !d.explanation && !d.notes && !d.quiz ? JSON.stringify(d, null, 2) : undefined,
+      raw: !d.response && !d.explanation && !d.notes && !d.short_notes && !d.quiz ? JSON.stringify(d, null, 2) : undefined,
     };
   }
   return {};
@@ -267,13 +267,18 @@ function ResultCards({ result }: { result: AIResult }) {
             <FileText className="h-4 w-4 text-primary" /> Short Notes
           </CardTitle>
         </CardHeader>
-        <CardContent className="text-sm">
+        <CardContent className="text-[15px] leading-7">
           {Array.isArray(result.notes) ? (
-            <ul className="list-disc space-y-1 pl-4">
+            <ul className="list-disc space-y-2 rounded-xl bg-background/60 p-4 pl-6">
               {result.notes.map((n, i) => <li key={i}>{n}</li>)}
             </ul>
           ) : result.notes ? (
-            <p className="whitespace-pre-wrap">{result.notes}</p>
+            <p
+              id="shortNotes"
+              className="rounded-xl bg-background/60 p-4 [white-space:pre-line]"
+            >
+              {result.notes}
+            </p>
           ) : (
             <em className="text-muted-foreground">No notes returned.</em>
           )}
