@@ -31,7 +31,7 @@ function parseResult(data: unknown): AIResult {
     const d = data as Record<string, unknown>;
     return {
       explanation: (d.response as string) || (d.explanation as string) || (d.answer as string),
-      notes: d.notes as AIResult["notes"],
+      notes: (d.short_notes as AIResult["notes"]) ?? (d.notes as AIResult["notes"]),
       quiz: d.quiz as AIResult["quiz"],
       raw: !d.response && !d.explanation && !d.notes && !d.quiz ? JSON.stringify(d, null, 2) : undefined,
     };
