@@ -5,7 +5,7 @@ import { FileUp, FileText, Loader2, CheckCircle2, X } from "lucide-react";
 import { getSessionId } from "@/lib/session";
 
 const UPLOAD_URL =
-  "https://shawl-tasting-rice.ngrok-free.dev/webhook/upload-pdf";
+  "https://shawl-tasting-rice.ngrok-free.dev/webhook/study-buddy";
 const MAX_SIZE = 20 * 1024 * 1024; // 20 MB
 
 export type UploadedPdf = {
@@ -48,10 +48,8 @@ export function PdfUpload({
       setUploading(true);
       try {
         const form = new FormData();
-        form.append("file", file, file.name);
-        form.append("data", file, file.name); // n8n often expects "data"
-        form.append("sessionId", getSessionId());
-        form.append("filename", file.name);
+        // MUST MATCH n8n: "file"
+        form.append("file", file);
 
         const res = await fetch(UPLOAD_URL, {
           method: "POST",
