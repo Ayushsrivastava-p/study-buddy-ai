@@ -86,6 +86,9 @@ export function StudyChat() {
         body: JSON.stringify({
           question: userQuestion,
           sessionId: getSessionId(),
+          pdf: uploadedPdf
+            ? { name: uploadedPdf.name, fileUrl: uploadedPdf.fileUrl, fileId: uploadedPdf.fileId }
+            : undefined,
         }),
       });
       if (!res.ok) throw new Error(`Request failed: ${res.status}`);
