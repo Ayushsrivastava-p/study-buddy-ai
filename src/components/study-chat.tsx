@@ -7,7 +7,7 @@ import {
   Sparkles, BookOpen, FileText, HelpCircle, Send, Loader2,
   History, Trash2, MessageSquare,
 } from "lucide-react";
-import { buildSessionPayload, getSessionId } from "@/lib/session";
+import { getSessionId } from "@/lib/session";
 
 const API_URL = "https://shawl-tasting-rice.ngrok-free.dev/webhook/study-buddy";
 const STORAGE_KEY = "study-buddy-history";
@@ -79,9 +79,12 @@ export function StudyChat() {
         method: "POST",
         mode: "cors",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify(
-          buildSessionPayload({ question: userQuestion, message: userQuestion }),
-        ),
+        // Send question + persistent sessionId so n8n Memory Plus can
+        // associate this request with prior conversation history.
+        body: JSON.stringify({
+          question: userQuestion,
+          sessionId: getSessionId(),
+        }),
       });
       if (!res.ok) throw new Error(`Request failed: ${res.status}`);
       const text = await res.text();
