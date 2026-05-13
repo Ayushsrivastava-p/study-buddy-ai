@@ -8,6 +8,7 @@ import {
   History, Trash2, MessageSquare,
 } from "lucide-react";
 import { getSessionId } from "@/lib/session";
+import { PdfUpload, type UploadedPdf } from "@/components/pdf-upload";
 
 const API_URL = "https://shawl-tasting-rice.ngrok-free.dev/webhook/study-buddy";
 const STORAGE_KEY = "study-buddy-history";
@@ -51,6 +52,7 @@ export function StudyChat() {
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [uploadedPdf, setUploadedPdf] = useState<UploadedPdf | null>(null);
 
   useEffect(() => { getSessionId(); }, []);
 
@@ -84,6 +86,9 @@ export function StudyChat() {
         body: JSON.stringify({
           question: userQuestion,
           sessionId: getSessionId(),
+          pdf: uploadedPdf
+            ? { name: uploadedPdf.name, fileUrl: uploadedPdf.fileUrl, fileId: uploadedPdf.fileId }
+            : undefined,
         }),
       });
       if (!res.ok) throw new Error(`Request failed: ${res.status}`);
@@ -112,6 +117,7 @@ export function StudyChat() {
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
       <div className="space-y-6 min-w-0">
+        <PdfUpload onUploaded={setUploadedPdf} />
         <Card className="overflow-hidden border-0 bg-gradient-card shadow-soft">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
