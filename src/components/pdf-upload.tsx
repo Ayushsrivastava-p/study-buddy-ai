@@ -16,6 +16,7 @@ export type UploadedPdf = {
   fileUrl?: string;
   previewUrl?: string;
   fileId?: string;
+  pdfText?: string;
   raw?: unknown;
 };
 
@@ -99,12 +100,21 @@ export function PdfUpload({
         try { data = JSON.parse(text); } catch { /* keep text */ }
 
         const d = (data && typeof data === "object" ? data : {}) as Record<string, unknown>;
+        // Extract extracted PDF text from common response shapes so we can
+        // forward it with future AI questions for full-document context.
+        const pdfText =
+          (d.pdfText as string) ||
+          (d.text as string) ||
+          (d.content as string) ||
+          (d.extractedText as string) ||
+          (typeof data === "string" ? (data as string) : undefined);
         const result: UploadedPdf = {
           name: file.name,
           size: file.size,
           previewUrl,
           fileUrl: (d.fileUrl as string) || (d.url as string) || (d.file_url as string),
           fileId: (d.fileId as string) || (d.id as string) || (d.file_id as string),
+          pdfText,
           raw: data,
         };
         setUploaded(result);

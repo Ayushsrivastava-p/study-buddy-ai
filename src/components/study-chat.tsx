@@ -86,9 +86,9 @@ export function StudyChat() {
         body: JSON.stringify({
           question: userQuestion,
           sessionId: getSessionId(),
-          pdf: uploadedPdf
-            ? { name: uploadedPdf.name, fileUrl: uploadedPdf.fileUrl, fileId: uploadedPdf.fileId }
-            : undefined,
+          // Send the extracted PDF text (not just the file name) so the AI
+          // has full document context when answering.
+          pdfText: uploadedPdf?.pdfText,
         }),
       });
       if (!res.ok) throw new Error(`Request failed: ${res.status}`);
