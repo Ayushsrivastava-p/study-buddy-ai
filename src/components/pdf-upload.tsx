@@ -98,16 +98,33 @@ export function PdfUpload({
         const text = await res.text();
         let data: unknown = text;
         try { data = JSON.parse(text); } catch { /* keep text */ }
+        console.log("UPLOAD RESPONSE:", data);
 
-        const d = (data && typeof data === "object" ? data : {}) as Record<string, unknown>;
-        // Extract extracted PDF text from common response shapes so we can
-        // forward it with future AI questions for full-document context.
-        const pdfText =
-          (d.pdfText as string) ||
-          (d.text as string) ||
-          (d.content as string) ||
-          (d.extractedText as string) ||
-          (typeof data === "string" ? (data as string) : undefined);
+        // n8n often wraps responses in an array — unwrap first item.
+        const root: unknown = Array.isArray(data) ? (data as unknown[])[0] : data;
+        const d = (root && typeof root === "object" ? root : {}) as Record<string, unknown>;
+
+        // Walk common nested shapes to find extracted text.
+        const pickText = (o: unknown): string | undefined => {
+          if (!o) return undefined;
+          if (typeof o === "string") return o;
+          if (typeof o !== "object") return undefined;
+          const r = o as Record<string, unknown>;
+          return (
+            (r.pdfText as string) ||
+            (r.text as string) ||
+            (r.content as string) ||
+            (r.extractedText as string) ||
+            (r.extracted_text as string) ||
+            pickText(r.data) ||
+            pickText(r.json) ||
+            pickText(r.result) ||
+            pickText(r.output) ||
+            undefined
+          );
+        };
+        const pdfText = pickText(root);
+        console.log("STORED PDF TEXT:", pdfText ? `${pdfText.length} chars` : "(empty)");
         const result: UploadedPdf = {
           name: file.name,
           size: file.size,
