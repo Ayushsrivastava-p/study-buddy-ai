@@ -236,6 +236,7 @@ export function PdfUpload({
                   setUploaded(null);
                   setBackendStatus("idle");
                   setBackendWarning(null);
+                  onUploaded?.(null);
                 }}
                 aria-label="Remove"
               >
