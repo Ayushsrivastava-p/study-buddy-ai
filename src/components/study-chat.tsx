@@ -77,7 +77,9 @@ export function StudyChat() {
         method: "POST",
         mode: "cors",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({ question: userQuestion }),
+        body: JSON.stringify(
+          buildSessionPayload({ question: userQuestion, message: userQuestion }),
+        ),
       });
       if (!res.ok) throw new Error(`Request failed: ${res.status}`);
       const text = await res.text();
