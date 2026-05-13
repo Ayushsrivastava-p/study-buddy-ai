@@ -53,6 +53,19 @@ export function StudyChat() {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [uploadedPdf, setUploadedPdf] = useState<UploadedPdf | null>(null);
+  const [pdfText, setPdfText] = useState<string>("");
+
+  const handlePdfUploaded = (pdf: UploadedPdf | null) => {
+    setUploadedPdf(pdf);
+    if (!pdf) {
+      setPdfText("");
+      return;
+    }
+    if (pdf.pdfText && pdf.pdfText.trim().length > 0) {
+      setPdfText(pdf.pdfText);
+      console.log("[StudyChat] pdfText stored, length:", pdf.pdfText.length);
+    }
+  };
 
   useEffect(() => { getSessionId(); }, []);
 
