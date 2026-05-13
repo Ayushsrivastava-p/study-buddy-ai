@@ -72,6 +72,8 @@ export function PdfUpload({
       };
       setUploaded(initial);
       onUploaded?.(initial);
+      setBackendWarning(null);
+      setBackendStatus("uploading");
 
       setUploading(true);
       try {
@@ -83,10 +85,15 @@ export function PdfUpload({
           method: "POST",
           body: form,
         });
+
         if (!res.ok) {
-          if (res.status === 413) throw new Error("File too large for server.");
-          throw new Error(`Upload failed: ${res.status}`);
+          // Don't fail the whole flow — local preview still works.
+          console.warn("Backend upload failed with status:", res.status);
+          setBackendStatus("unavailable");
+          setBackendWarning("PDF preview available locally, backend processing unavailable.");
+          return;
         }
+
         const text = await res.text();
         let data: unknown = text;
         try { data = JSON.parse(text); } catch { /* keep text */ }
@@ -102,9 +109,12 @@ export function PdfUpload({
         };
         setUploaded(result);
         onUploaded?.(result);
+        setBackendStatus("connected");
       } catch (e) {
-        console.error("PDF upload error:", e);
-        setError(e instanceof Error ? e.message : "Upload failed");
+        // Network failure — keep local preview, surface warning instead of fatal error.
+        console.warn("PDF backend upload error:", e);
+        setBackendStatus("unavailable");
+        setBackendWarning("PDF preview available locally, backend processing unavailable.");
       } finally {
         setUploading(false);
       }
