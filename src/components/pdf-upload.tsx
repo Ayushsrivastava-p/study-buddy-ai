@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileUp, FileText, Loader2, CheckCircle2, X } from "lucide-react";
+import { FileUp, FileText, Loader2, CheckCircle2, X, ExternalLink, AlertTriangle } from "lucide-react";
 import { getSessionId } from "@/lib/session";
+
+type BackendStatus = "idle" | "uploading" | "connected" | "unavailable";
 
 const UPLOAD_URL =
   "https://shawl-tasting-rice.ngrok-free.dev/webhook/study-buddy";
@@ -33,6 +35,8 @@ export function PdfUpload({
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploaded, setUploaded] = useState<UploadedPdf | null>(null);
+  const [backendStatus, setBackendStatus] = useState<BackendStatus>("idle");
+  const [backendWarning, setBackendWarning] = useState<string | null>(null);
 
   // Track current object URL so we can revoke it when replaced/unmounted
   const previewUrlRef = useRef<string | null>(null);
@@ -68,6 +72,8 @@ export function PdfUpload({
       };
       setUploaded(initial);
       onUploaded?.(initial);
+      setBackendWarning(null);
+      setBackendStatus("uploading");
 
       setUploading(true);
       try {
@@ -79,10 +85,15 @@ export function PdfUpload({
           method: "POST",
           body: form,
         });
+
         if (!res.ok) {
-          if (res.status === 413) throw new Error("File too large for server.");
-          throw new Error(`Upload failed: ${res.status}`);
+          // Don't fail the whole flow — local preview still works.
+          console.warn("Backend upload failed with status:", res.status);
+          setBackendStatus("unavailable");
+          setBackendWarning("PDF preview available locally, backend processing unavailable.");
+          return;
         }
+
         const text = await res.text();
         let data: unknown = text;
         try { data = JSON.parse(text); } catch { /* keep text */ }
@@ -98,9 +109,12 @@ export function PdfUpload({
         };
         setUploaded(result);
         onUploaded?.(result);
+        setBackendStatus("connected");
       } catch (e) {
-        console.error("PDF upload error:", e);
-        setError(e instanceof Error ? e.message : "Upload failed");
+        // Network failure — keep local preview, surface warning instead of fatal error.
+        console.warn("PDF backend upload error:", e);
+        setBackendStatus("unavailable");
+        setBackendWarning("PDF preview available locally, backend processing unavailable.");
       } finally {
         setUploading(false);
       }
@@ -172,26 +186,32 @@ export function PdfUpload({
               <FileText className="h-8 w-8 shrink-0 text-primary" />
               <div className="min-w-0 flex-1">
                 <p className="flex items-center gap-1.5 text-sm font-medium text-foreground">
-                  {uploading ? (
-                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                  ) : (
-                    <CheckCircle2 className="h-4 w-4 text-primary" />
-                  )}
-                  {uploading ? "Uploading to server…" : "PDF ready"}
+                  <CheckCircle2 className="h-4 w-4 text-primary" />
+                  PDF Ready
                 </p>
                 <p className="truncate text-xs text-muted-foreground">
                   {uploaded.name} · {formatBytes(uploaded.size)}
                 </p>
-                {(uploaded.fileUrl || uploaded.previewUrl) && (
-                  <a
-                    href={uploaded.fileUrl || uploaded.previewUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-xs text-primary underline"
-                  >
-                    Open in new tab
-                  </a>
-                )}
+                <div className="mt-1 flex items-center gap-1.5 text-xs">
+                  {backendStatus === "uploading" && (
+                    <>
+                      <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                      <span className="text-muted-foreground">Uploading to backend…</span>
+                    </>
+                  )}
+                  {backendStatus === "connected" && (
+                    <>
+                      <CheckCircle2 className="h-3 w-3 text-primary" />
+                      <span className="text-primary">Backend connected</span>
+                    </>
+                  )}
+                  {backendStatus === "unavailable" && (
+                    <>
+                      <AlertTriangle className="h-3 w-3 text-amber-500" />
+                      <span className="text-amber-600 dark:text-amber-400">Backend processing unavailable</span>
+                    </>
+                  )}
+                </div>
               </div>
               <Button
                 variant="ghost"
@@ -204,6 +224,8 @@ export function PdfUpload({
                     previewUrlRef.current = null;
                   }
                   setUploaded(null);
+                  setBackendStatus("idle");
+                  setBackendWarning(null);
                 }}
                 aria-label="Remove"
               >
@@ -211,14 +233,34 @@ export function PdfUpload({
               </Button>
             </div>
 
+            {backendWarning && (
+              <div className="flex items-start gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>{backendWarning}</span>
+              </div>
+            )}
+
+            {(uploaded.previewUrl || uploaded.fileUrl) && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => window.open(uploaded.previewUrl || uploaded.fileUrl, "_blank")}
+                className="rounded-full"
+              >
+                <ExternalLink className="mr-2 h-4 w-4" />
+                Open PDF in New Tab
+              </Button>
+            )}
+
             {(uploaded.previewUrl || uploaded.fileUrl) ? (
               <div className="overflow-hidden rounded-xl border border-border/60 bg-background">
-                <iframe
+                <embed
                   src={uploaded.previewUrl || uploaded.fileUrl}
-                  title={uploaded.name}
+                  type="application/pdf"
                   width="100%"
                   height="600px"
-                  className="block w-full"
+                  className="block w-full rounded-xl"
                 />
               </div>
             ) : (
