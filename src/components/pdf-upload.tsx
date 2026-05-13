@@ -29,7 +29,7 @@ function formatBytes(bytes: number) {
 export function PdfUpload({
   onUploaded,
 }: {
-  onUploaded?: (file: UploadedPdf) => void;
+  onUploaded?: (file: UploadedPdf | null) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
