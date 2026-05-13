@@ -52,6 +52,7 @@ export function StudyChat() {
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [uploadedPdf, setUploadedPdf] = useState<UploadedPdf | null>(null);
 
   useEffect(() => { getSessionId(); }, []);
 
