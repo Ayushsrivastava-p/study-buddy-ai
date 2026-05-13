@@ -12,6 +12,7 @@ export type UploadedPdf = {
   name: string;
   size: number;
   fileUrl?: string;
+  previewUrl?: string;
   fileId?: string;
   raw?: unknown;
 };
