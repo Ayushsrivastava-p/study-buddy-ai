@@ -34,6 +34,15 @@ export function PdfUpload({
   const [error, setError] = useState<string | null>(null);
   const [uploaded, setUploaded] = useState<UploadedPdf | null>(null);
 
+  // Track current object URL so we can revoke it when replaced/unmounted
+  const previewUrlRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    };
+  }, []);
+
   const handleFile = useCallback(
     async (file: File) => {
       setError(null);
@@ -45,6 +54,20 @@ export function PdfUpload({
         setError(`File too large. Max ${formatBytes(MAX_SIZE)}.`);
         return;
       }
+
+      // Create local browser preview URL instantly so the user sees the PDF
+      // immediately, regardless of what the backend returns.
+      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+      const previewUrl = URL.createObjectURL(file);
+      previewUrlRef.current = previewUrl;
+
+      const initial: UploadedPdf = {
+        name: file.name,
+        size: file.size,
+        previewUrl,
+      };
+      setUploaded(initial);
+      onUploaded?.(initial);
 
       setUploading(true);
       try {
@@ -68,6 +91,7 @@ export function PdfUpload({
         const result: UploadedPdf = {
           name: file.name,
           size: file.size,
+          previewUrl,
           fileUrl: (d.fileUrl as string) || (d.url as string) || (d.file_url as string),
           fileId: (d.fileId as string) || (d.id as string) || (d.file_id as string),
           raw: data,
