@@ -88,7 +88,10 @@ export function StudyChat() {
     setError(null);
     const userQuestion = question.trim();
     try {
-      console.log("[StudyChat] Sending chat request. pdfText length:", pdfText.length, "preview:", pdfText.slice(0, 120));
+      console.log("Sending pdfText:", pdfText);
+      if (!pdfText?.trim()) {
+        console.warn("pdfText is empty before request");
+      }
       const res = await fetch(API_URL, {
         method: "POST",
         mode: "cors",
