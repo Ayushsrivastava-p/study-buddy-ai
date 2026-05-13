@@ -8,6 +8,7 @@ import {
   History, Trash2, MessageSquare,
 } from "lucide-react";
 import { getSessionId } from "@/lib/session";
+import { PdfUpload, type UploadedPdf } from "@/components/pdf-upload";
 
 const API_URL = "https://shawl-tasting-rice.ngrok-free.dev/webhook/study-buddy";
 const STORAGE_KEY = "study-buddy-history";
