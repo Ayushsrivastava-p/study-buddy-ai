@@ -16,6 +16,7 @@ export type UploadedPdf = {
   fileUrl?: string;
   previewUrl?: string;
   fileId?: string;
+  pdfText?: string;
   raw?: unknown;
 };
 
