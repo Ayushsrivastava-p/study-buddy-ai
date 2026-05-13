@@ -166,21 +166,25 @@ export function PdfUpload({
           </div>
         )}
 
-        {uploaded && !uploading && (
+        {uploaded && (
           <div className="space-y-3">
             <div className="flex items-center gap-3 rounded-xl border border-primary/30 bg-primary/5 p-3">
               <FileText className="h-8 w-8 shrink-0 text-primary" />
               <div className="min-w-0 flex-1">
                 <p className="flex items-center gap-1.5 text-sm font-medium text-foreground">
-                  <CheckCircle2 className="h-4 w-4 text-primary" />
-                  PDF uploaded successfully
+                  {uploading ? (
+                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                  ) : (
+                    <CheckCircle2 className="h-4 w-4 text-primary" />
+                  )}
+                  {uploading ? "Uploading to server…" : "PDF ready"}
                 </p>
                 <p className="truncate text-xs text-muted-foreground">
                   {uploaded.name} · {formatBytes(uploaded.size)}
                 </p>
-                {uploaded.fileUrl && (
+                {(uploaded.fileUrl || uploaded.previewUrl) && (
                   <a
-                    href={uploaded.fileUrl}
+                    href={uploaded.fileUrl || uploaded.previewUrl}
                     target="_blank"
                     rel="noreferrer"
                     className="text-xs text-primary underline"
@@ -193,17 +197,24 @@ export function PdfUpload({
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8"
-                onClick={() => setUploaded(null)}
+                disabled={uploading}
+                onClick={() => {
+                  if (previewUrlRef.current) {
+                    URL.revokeObjectURL(previewUrlRef.current);
+                    previewUrlRef.current = null;
+                  }
+                  setUploaded(null);
+                }}
                 aria-label="Remove"
               >
                 <X className="h-4 w-4" />
               </Button>
             </div>
 
-            {uploaded.fileUrl ? (
+            {(uploaded.previewUrl || uploaded.fileUrl) ? (
               <div className="overflow-hidden rounded-xl border border-border/60 bg-background">
                 <iframe
-                  src={uploaded.fileUrl}
+                  src={uploaded.previewUrl || uploaded.fileUrl}
                   title={uploaded.name}
                   width="100%"
                   height="600px"
@@ -212,7 +223,7 @@ export function PdfUpload({
               </div>
             ) : (
               <p className="rounded-xl border border-dashed border-border/60 bg-background/40 p-3 text-xs text-muted-foreground">
-                Preview unavailable — backend did not return a fileUrl.
+                Preview unavailable.
               </p>
             )}
           </div>
