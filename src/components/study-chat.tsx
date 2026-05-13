@@ -52,17 +52,11 @@ export function StudyChat() {
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [pdfText, setPdfText] = useState<string>("");
+  const [uploadedPdf, setUploadedPdf] = useState<UploadedPdf | null>(null);
 
   const handlePdfUploaded = (pdf: UploadedPdf | null) => {
-    if (!pdf) {
-      setPdfText("");
-      return;
-    }
-    if (pdf.pdfText && pdf.pdfText.trim().length > 0) {
-      setPdfText(pdf.pdfText);
-      console.log("[StudyChat] pdfText stored, length:", pdf.pdfText.length);
-    }
+    setUploadedPdf(pdf);
+    console.log("[StudyChat] uploadedPdf set, pdfText length:", pdf?.pdfText?.length ?? 0);
   };
 
   useEffect(() => { getSessionId(); }, []);
@@ -88,8 +82,8 @@ export function StudyChat() {
     setError(null);
     const userQuestion = question.trim();
     try {
-      console.log("Sending pdfText:", pdfText);
-      if (!pdfText?.trim()) {
+      console.log("CHAT REQUEST PDF TEXT:", uploadedPdf?.pdfText);
+      if (!uploadedPdf?.pdfText?.trim()) {
         console.warn("pdfText is empty before request");
       }
       const res = await fetch(API_URL, {
@@ -99,7 +93,7 @@ export function StudyChat() {
         body: JSON.stringify({
           question: userQuestion,
           sessionId: getSessionId(),
-          pdfText,
+          pdfText: uploadedPdf?.pdfText || "",
         }),
       });
       if (!res.ok) throw new Error(`Request failed: ${res.status}`);
