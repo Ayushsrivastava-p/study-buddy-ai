@@ -90,18 +90,15 @@ export function StudyChat() {
     setError(null);
     const userQuestion = question.trim();
     try {
+      console.log("[StudyChat] Sending chat request. pdfText length:", pdfText.length, "preview:", pdfText.slice(0, 120));
       const res = await fetch(API_URL, {
         method: "POST",
         mode: "cors",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
-        // Send question + persistent sessionId so n8n Memory Plus can
-        // associate this request with prior conversation history.
         body: JSON.stringify({
           question: userQuestion,
           sessionId: getSessionId(),
-          // Send the extracted PDF text (not just the file name) so the AI
-          // has full document context when answering.
-          pdfText: uploadedPdf?.pdfText,
+          pdfText,
         }),
       });
       if (!res.ok) throw new Error(`Request failed: ${res.status}`);
