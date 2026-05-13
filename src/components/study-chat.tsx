@@ -52,7 +52,18 @@ export function StudyChat() {
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [uploadedPdf, setUploadedPdf] = useState<UploadedPdf | null>(null);
+  const [pdfText, setPdfText] = useState<string>("");
+
+  const handlePdfUploaded = (pdf: UploadedPdf | null) => {
+    if (!pdf) {
+      setPdfText("");
+      return;
+    }
+    if (pdf.pdfText && pdf.pdfText.trim().length > 0) {
+      setPdfText(pdf.pdfText);
+      console.log("[StudyChat] pdfText stored, length:", pdf.pdfText.length);
+    }
+  };
 
   useEffect(() => { getSessionId(); }, []);
 
@@ -77,18 +88,15 @@ export function StudyChat() {
     setError(null);
     const userQuestion = question.trim();
     try {
+      console.log("[StudyChat] Sending chat request. pdfText length:", pdfText.length, "preview:", pdfText.slice(0, 120));
       const res = await fetch(API_URL, {
         method: "POST",
         mode: "cors",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
-        // Send question + persistent sessionId so n8n Memory Plus can
-        // associate this request with prior conversation history.
         body: JSON.stringify({
           question: userQuestion,
           sessionId: getSessionId(),
-          // Send the extracted PDF text (not just the file name) so the AI
-          // has full document context when answering.
-          pdfText: uploadedPdf?.pdfText,
+          pdfText,
         }),
       });
       if (!res.ok) throw new Error(`Request failed: ${res.status}`);
@@ -117,7 +125,7 @@ export function StudyChat() {
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
       <div className="space-y-6 min-w-0">
-        <PdfUpload onUploaded={setUploadedPdf} />
+        <PdfUpload onUploaded={handlePdfUploaded} />
         <Card className="overflow-hidden border-0 bg-gradient-card shadow-soft">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
