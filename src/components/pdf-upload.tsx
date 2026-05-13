@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileUp, FileText, Loader2, CheckCircle2, X } from "lucide-react";
+import { FileUp, FileText, Loader2, CheckCircle2, X, ExternalLink, AlertTriangle } from "lucide-react";
 import { getSessionId } from "@/lib/session";
+
+type BackendStatus = "idle" | "uploading" | "connected" | "unavailable";
 
 const UPLOAD_URL =
   "https://shawl-tasting-rice.ngrok-free.dev/webhook/study-buddy";
