@@ -35,6 +35,8 @@ export function PdfUpload({
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploaded, setUploaded] = useState<UploadedPdf | null>(null);
+  const [backendStatus, setBackendStatus] = useState<BackendStatus>("idle");
+  const [backendWarning, setBackendWarning] = useState<string | null>(null);
 
   // Track current object URL so we can revoke it when replaced/unmounted
   const previewUrlRef = useRef<string | null>(null);
