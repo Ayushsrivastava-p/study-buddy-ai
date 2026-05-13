@@ -127,7 +127,7 @@ export function StudyChat() {
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
       <div className="space-y-6 min-w-0">
-        <PdfUpload onUploaded={handlePdfUploaded} />,
+        <PdfUpload onUploaded={handlePdfUploaded} />
         <Card className="overflow-hidden border-0 bg-gradient-card shadow-soft">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
