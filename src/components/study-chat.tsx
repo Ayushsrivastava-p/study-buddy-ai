@@ -52,6 +52,8 @@ export function StudyChat() {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
 
+  useEffect(() => { getSessionId(); }, []);
+
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
