@@ -82,8 +82,8 @@ export function StudyChat() {
     setError(null);
     const userQuestion = question.trim();
     try {
-      console.log("Sending pdfText:", pdfText);
-      if (!pdfText?.trim()) {
+      console.log("CHAT REQUEST PDF TEXT:", uploadedPdf?.pdfText);
+      if (!uploadedPdf?.pdfText?.trim()) {
         console.warn("pdfText is empty before request");
       }
       const res = await fetch(API_URL, {
@@ -93,7 +93,7 @@ export function StudyChat() {
         body: JSON.stringify({
           question: userQuestion,
           sessionId: getSessionId(),
-          pdfText,
+          pdfText: uploadedPdf?.pdfText || "",
         }),
       });
       if (!res.ok) throw new Error(`Request failed: ${res.status}`);
