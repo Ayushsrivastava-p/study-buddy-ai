@@ -1,0 +1,182 @@
+import { useCallback, useRef, useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { FileUp, FileText, Loader2, CheckCircle2, X } from "lucide-react";
+import { getSessionId } from "@/lib/session";
+
+const UPLOAD_URL =
+  "https://shawl-tasting-rice.ngrok-free.dev/webhook/upload-pdf";
+const MAX_SIZE = 20 * 1024 * 1024; // 20 MB
+
+export type UploadedPdf = {
+  name: string;
+  size: number;
+  fileUrl?: string;
+  fileId?: string;
+  raw?: unknown;
+};
+
+function formatBytes(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
+}
+
+export function PdfUpload({
+  onUploaded,
+}: {
+  onUploaded?: (file: UploadedPdf) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [uploaded, setUploaded] = useState<UploadedPdf | null>(null);
+
+  const handleFile = useCallback(
+    async (file: File) => {
+      setError(null);
+      if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+        setError("Only PDF files are allowed.");
+        return;
+      }
+      if (file.size > MAX_SIZE) {
+        setError(`File too large. Max ${formatBytes(MAX_SIZE)}.`);
+        return;
+      }
+
+      setUploading(true);
+      try {
+        const form = new FormData();
+        form.append("file", file, file.name);
+        form.append("data", file, file.name); // n8n often expects "data"
+        form.append("sessionId", getSessionId());
+        form.append("filename", file.name);
+
+        const res = await fetch(UPLOAD_URL, {
+          method: "POST",
+          body: form,
+        });
+        if (!res.ok) {
+          if (res.status === 413) throw new Error("File too large for server.");
+          throw new Error(`Upload failed: ${res.status}`);
+        }
+        const text = await res.text();
+        let data: unknown = text;
+        try { data = JSON.parse(text); } catch { /* keep text */ }
+
+        const d = (data && typeof data === "object" ? data : {}) as Record<string, unknown>;
+        const result: UploadedPdf = {
+          name: file.name,
+          size: file.size,
+          fileUrl: (d.fileUrl as string) || (d.url as string) || (d.file_url as string),
+          fileId: (d.fileId as string) || (d.id as string) || (d.file_id as string),
+          raw: data,
+        };
+        setUploaded(result);
+        onUploaded?.(result);
+      } catch (e) {
+        console.error("PDF upload error:", e);
+        setError(e instanceof Error ? e.message : "Upload failed");
+      } finally {
+        setUploading(false);
+      }
+    },
+    [onUploaded],
+  );
+
+  const onDrop = useCallback(
+    (e: React.DragEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      setDragOver(false);
+      const file = e.dataTransfer.files?.[0];
+      if (file) handleFile(file);
+    },
+    [handleFile],
+  );
+
+  return (
+    <Card className="border-0 bg-gradient-card shadow-soft">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <FileUp className="h-4 w-4 text-primary" /> Upload PDF
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={onDrop}
+          onClick={() => !uploading && inputRef.current?.click()}
+          className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed p-6 text-center transition-colors ${
+            dragOver ? "border-primary bg-primary/5" : "border-border/60 bg-background/40 hover:bg-background/60"
+          } ${uploading ? "pointer-events-none opacity-70" : ""}`}
+        >
+          <FileUp className="h-7 w-7 text-primary" />
+          <p className="text-sm font-medium">Drag & drop your PDF here</p>
+          <p className="text-xs text-muted-foreground">or click to browse (max 20 MB)</p>
+          <input
+            ref={inputRef}
+            type="file"
+            accept="application/pdf,.pdf"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) handleFile(f);
+              e.target.value = "";
+            }}
+          />
+          <Button
+            type="button"
+            disabled={uploading}
+            onClick={(e) => { e.stopPropagation(); inputRef.current?.click(); }}
+            className="mt-2 rounded-full bg-gradient-primary px-5 shadow-glow hover:opacity-90"
+          >
+            {uploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileUp className="mr-2 h-4 w-4" />}
+            {uploading ? "Uploading…" : "Choose PDF"}
+          </Button>
+        </div>
+
+        {error && (
+          <div className="rounded-xl border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
+            {error}
+          </div>
+        )}
+
+        {uploaded && !uploading && (
+          <div className="flex items-center gap-3 rounded-xl border border-primary/30 bg-primary/5 p-3">
+            <FileText className="h-8 w-8 shrink-0 text-primary" />
+            <div className="min-w-0 flex-1">
+              <p className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                <CheckCircle2 className="h-4 w-4 text-primary" />
+                PDF uploaded successfully
+              </p>
+              <p className="truncate text-xs text-muted-foreground">
+                {uploaded.name} · {formatBytes(uploaded.size)}
+              </p>
+              {uploaded.fileUrl && (
+                <a
+                  href={uploaded.fileUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs text-primary underline"
+                >
+                  View file
+                </a>
+              )}
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setUploaded(null)}
+              aria-label="Remove"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
