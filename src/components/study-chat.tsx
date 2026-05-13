@@ -7,6 +7,7 @@ import {
   Sparkles, BookOpen, FileText, HelpCircle, Send, Loader2,
   History, Trash2, MessageSquare,
 } from "lucide-react";
+import { buildSessionPayload, getSessionId } from "@/lib/session";
 
 const API_URL = "https://shawl-tasting-rice.ngrok-free.dev/webhook/study-buddy";
 const STORAGE_KEY = "study-buddy-history";
