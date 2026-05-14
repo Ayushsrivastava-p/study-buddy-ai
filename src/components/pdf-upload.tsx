@@ -70,6 +70,7 @@ export function PdfUpload({
       const initial: UploadedPdf = {
         name: file.name,
         size: file.size,
+        file,
         previewUrl,
       };
       setUploaded(initial);
