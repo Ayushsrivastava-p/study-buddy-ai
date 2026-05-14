@@ -82,19 +82,21 @@ export function StudyChat() {
     setError(null);
     const userQuestion = question.trim();
     try {
-      console.log("CHAT REQUEST PDF TEXT:", uploadedPdf?.pdfText);
-      if (!uploadedPdf?.pdfText?.trim()) {
-        console.warn("pdfText is empty before request");
+      const form = new FormData();
+      form.append("question", userQuestion);
+      form.append("sessionId", getSessionId());
+      if (uploadedPdf?.file) {
+        form.append("file", uploadedPdf.file, uploadedPdf.file.name);
+        console.log("[StudyChat] sending file:", uploadedPdf.file.name, uploadedPdf.file.size);
+      } else {
+        console.warn("[StudyChat] no PDF file attached");
       }
+
       const res = await fetch(API_URL, {
         method: "POST",
         mode: "cors",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({
-          question: userQuestion,
-          sessionId: getSessionId(),
-          pdfText: uploadedPdf?.pdfText || "",
-        }),
+        // NOTE: do NOT set Content-Type — browser sets multipart boundary
+        body: form,
       });
       if (!res.ok) throw new Error(`Request failed: ${res.status}`);
       const text = await res.text();
