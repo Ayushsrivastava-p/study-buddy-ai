@@ -13,6 +13,7 @@ const MAX_SIZE = 20 * 1024 * 1024; // 20 MB
 export type UploadedPdf = {
   name: string;
   size: number;
+  file?: File;
   fileUrl?: string;
   previewUrl?: string;
   fileId?: string;
@@ -69,6 +70,7 @@ export function PdfUpload({
       const initial: UploadedPdf = {
         name: file.name,
         size: file.size,
+        file,
         previewUrl,
       };
       setUploaded(initial);
@@ -128,6 +130,7 @@ export function PdfUpload({
         const result: UploadedPdf = {
           name: file.name,
           size: file.size,
+          file,
           previewUrl,
           fileUrl: (d.fileUrl as string) || (d.url as string) || (d.file_url as string),
           fileId: (d.fileId as string) || (d.id as string) || (d.file_id as string),
