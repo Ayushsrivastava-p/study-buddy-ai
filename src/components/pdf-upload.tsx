@@ -130,6 +130,7 @@ export function PdfUpload({
         const result: UploadedPdf = {
           name: file.name,
           size: file.size,
+          file,
           previewUrl,
           fileUrl: (d.fileUrl as string) || (d.url as string) || (d.file_url as string),
           fileId: (d.fileId as string) || (d.id as string) || (d.file_id as string),
