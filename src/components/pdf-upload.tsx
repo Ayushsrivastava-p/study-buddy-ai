@@ -13,6 +13,7 @@ const MAX_SIZE = 20 * 1024 * 1024; // 20 MB
 export type UploadedPdf = {
   name: string;
   size: number;
+  file?: File;
   fileUrl?: string;
   previewUrl?: string;
   fileId?: string;
