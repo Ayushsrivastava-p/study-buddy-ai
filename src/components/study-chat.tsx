@@ -87,16 +87,32 @@ export function StudyChat() {
 
     try {
       const selectedFile = uploadedPdf?.file;
-      console.log(selectedFile);
+      const sessionId = getSessionId();
+      console.log("Sending chat with file:", selectedFile?.name ?? "(no file)");
 
-      const formData = new FormData();
+      let pdfBase64: string | null = null;
+      let fileName: string | null = null;
+
       if (selectedFile) {
-        formData.append("file", selectedFile);
+        fileName = selectedFile.name;
+        pdfBase64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = () => reject(reader.error ?? new Error("Failed to read PDF"));
+          reader.readAsDataURL(selectedFile);
+        });
       }
-      formData.append("question", text);
-      formData.append("sessionId", getSessionId());
 
-      const res = await fetch(API_URL, { method: "POST", body: formData });
+      const res = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          question: text,
+          sessionId,
+          fileName,
+          pdfBase64,
+        }),
+      });
       if (!res.ok) throw new Error(`Request failed: ${res.status}`);
       const raw = await res.text();
       let data: unknown = raw;
