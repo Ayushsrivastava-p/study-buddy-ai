@@ -164,7 +164,7 @@ export function StudyChat() {
               </div>
             )}
           </div>
-        </ScrollArea>
+        </div>
 
         {/* Quick actions */}
         <div className="flex flex-wrap gap-2 border-t border-border/40 px-4 py-3 md:px-6">
