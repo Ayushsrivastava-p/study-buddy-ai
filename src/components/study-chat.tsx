@@ -1,116 +1,111 @@
-import { useEffect, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
-  Sparkles, BookOpen, FileText, HelpCircle, Send, Loader2,
-  History, Trash2, MessageSquare,
+  Sparkles, FileText, HelpCircle, Send, Loader2,
+  Trash2, Bot, User, BookOpen,
 } from "lucide-react";
 import { getSessionId } from "@/lib/session";
 import { PdfUpload, type UploadedPdf } from "@/components/pdf-upload";
 
 const API_URL = "https://shawl-tasting-rice.ngrok-free.dev/webhook/study-buddy";
-const STORAGE_KEY = "study-buddy-history";
+const STORAGE_KEY = "study-buddy-chat";
 
-type AIResult = {
-  explanation?: string;
-  notes?: string[] | string;
-  quiz?: { question: string; answer?: string; options?: string[] }[] | string;
-  raw?: string;
-};
-
-type HistoryEntry = {
+type Role = "user" | "assistant";
+type Message = {
   id: string;
-  question: string;
-  result: AIResult;
+  role: Role;
+  content: string;
   createdAt: number;
 };
 
-function parseResult(data: unknown): AIResult {
-  if (typeof data === "string") return { raw: data };
+function pickAnswer(data: unknown): string {
+  if (typeof data === "string") return data;
+  if (Array.isArray(data)) return pickAnswer(data[0]);
   if (data && typeof data === "object") {
     const d = data as Record<string, unknown>;
-    return {
-      explanation: (d.response as string) || (d.explanation as string) || (d.answer as string),
-      notes: (d.short_notes as AIResult["notes"]) ?? (d.notes as AIResult["notes"]),
-      quiz: d.quiz as AIResult["quiz"],
-      raw: !d.response && !d.explanation && !d.notes && !d.short_notes && !d.quiz ? JSON.stringify(d, null, 2) : undefined,
-    };
+    return (
+      (d.answer as string) ||
+      (d.response as string) ||
+      (d.explanation as string) ||
+      (d.text as string) ||
+      (d.output as string) ||
+      pickAnswer(d.data) ||
+      pickAnswer(d.json) ||
+      pickAnswer(d.result) ||
+      JSON.stringify(d, null, 2)
+    );
   }
-  return {};
+  return "";
 }
 
 function formatTime(ts: number) {
-  const d = new Date(ts);
-  return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  return new Date(ts).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
 }
 
 export function StudyChat() {
   const [question, setQuestion] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
-  const [activeId, setActiveId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [uploadedPdf, setUploadedPdf] = useState<UploadedPdf | null>(null);
-
-  const handlePdfUploaded = (pdf: UploadedPdf | null) => {
-    setUploadedPdf(pdf);
-    console.log("[StudyChat] uploadedPdf set, pdfText length:", pdf?.pdfText?.length ?? 0);
-  };
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { getSessionId(); }, []);
 
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw) as HistoryEntry[];
-        setHistory(parsed);
-        setActiveId(parsed[0]?.id ?? null);
-      }
+      if (raw) setMessages(JSON.parse(raw) as Message[]);
     } catch { /* ignore */ }
   }, []);
 
   useEffect(() => {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(history)); } catch { /* ignore */ }
-  }, [history]);
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(messages)); } catch { /* ignore */ }
+  }, [messages]);
 
-  const askAI = async () => {
-    if (!question.trim()) return;
-    setLoading(true);
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+  }, [messages, loading]);
+
+  const send = async (prompt?: string) => {
+    const text = (prompt ?? question).trim();
+    if (!text || loading) return;
     setError(null);
-    const userQuestion = question.trim();
+    setLoading(true);
+
+    const userMsg: Message = {
+      id: crypto.randomUUID(),
+      role: "user",
+      content: text,
+      createdAt: Date.now(),
+    };
+    setMessages((m) => [...m, userMsg]);
+    setQuestion("");
+
     try {
-      const form = new FormData();
-      form.append("question", userQuestion);
-      form.append("sessionId", getSessionId());
+      const formData = new FormData();
+      formData.append("question", text);
+      formData.append("sessionId", getSessionId());
       if (uploadedPdf?.file) {
-        form.append("file", uploadedPdf.file, uploadedPdf.file.name);
-        console.log("[StudyChat] sending file:", uploadedPdf.file.name, uploadedPdf.file.size);
-      } else {
-        console.warn("[StudyChat] no PDF file attached");
+        formData.append("file", uploadedPdf.file, uploadedPdf.file.name);
       }
 
-      const res = await fetch(API_URL, {
-        method: "POST",
-        mode: "cors",
-        // NOTE: do NOT set Content-Type — browser sets multipart boundary
-        body: form,
-      });
+      const res = await fetch(API_URL, { method: "POST", body: formData });
       if (!res.ok) throw new Error(`Request failed: ${res.status}`);
-      const text = await res.text();
-      let data: unknown = text;
-      try { data = JSON.parse(text); } catch { /* keep as string */ }
-      const entry: HistoryEntry = {
+      const raw = await res.text();
+      let data: unknown = raw;
+      try { data = JSON.parse(raw); } catch { /* keep string */ }
+      const answer = pickAnswer(data) || "(empty response)";
+
+      setMessages((m) => [...m, {
         id: crypto.randomUUID(),
-        question: userQuestion,
-        result: parseResult(data),
+        role: "assistant",
+        content: answer,
         createdAt: Date.now(),
-      };
-      setHistory((h) => [entry, ...h]);
-      setActiveId(entry.id);
-      setQuestion("");
+      }]);
     } catch (e) {
       console.error("Study Buddy webhook error:", e);
       setError("Failed to connect to AI assistant");
@@ -119,219 +114,210 @@ export function StudyChat() {
     }
   };
 
-  const active = history.find((h) => h.id === activeId) ?? null;
+  const hasPdf = !!uploadedPdf?.file;
+  const canSend = useMemo(() => question.trim().length > 0 && !loading, [question, loading]);
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
-      <div className="space-y-6 min-w-0">
-        <PdfUpload onUploaded={handlePdfUploaded} />
-        <Card className="overflow-hidden border-0 bg-gradient-card shadow-soft">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-primary" />
-              Ask your AI Study Buddy
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <Textarea
-              value={question}
-              onChange={(e) => setQuestion(e.target.value)}
-              placeholder="e.g. Explain photosynthesis with a quick quiz…"
-              className="min-h-[110px] resize-none rounded-2xl border-border/50 bg-background/60"
-              onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) askAI(); }}
-            />
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">Tip: ⌘/Ctrl + Enter to send</span>
-              <Button
-                onClick={askAI}
-                disabled={loading || !question.trim()}
-                className="rounded-full bg-gradient-primary px-6 shadow-glow hover:opacity-90"
-              >
-                {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                Ask AI
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {loading && <LoadingCards />}
-
-        {error && (
-          <Card className="border-destructive/40 bg-destructive/5">
-            <CardContent className="pt-6 text-sm text-destructive">
-              {error}. Make sure your endpoint at <code className="font-mono">{API_URL}</code> is running.
-            </CardContent>
-          </Card>
-        )}
-
-        {active && !loading && (
-          <div className="space-y-3">
-            <div className="flex items-center gap-2 rounded-2xl bg-primary/10 px-4 py-3 text-sm">
-              <MessageSquare className="h-4 w-4 shrink-0 text-primary" />
-              <span className="font-medium">{active.question}</span>
-              <span className="ml-auto text-xs text-muted-foreground">{formatTime(active.createdAt)}</span>
-            </div>
-            <ResultCards result={active.result} />
-          </div>
-        )}
-
-        {!active && !loading && !error && (
-          <Card className="border-dashed bg-transparent">
-            <CardContent className="flex flex-col items-center justify-center gap-2 py-12 text-center text-muted-foreground">
-              <Sparkles className="h-8 w-8 text-primary/60" />
-              <p className="text-sm">Ask your first question to get started.</p>
-            </CardContent>
-          </Card>
-        )}
+    <div className="grid gap-6 lg:grid-cols-[340px_1fr]">
+      {/* Left: PDF panel */}
+      <div className="space-y-4">
+        <PdfUpload onUploaded={setUploadedPdf} />
       </div>
 
-      <HistoryPanel
-        history={history}
-        activeId={activeId}
-        onSelect={setActiveId}
-        onClear={() => { setHistory([]); setActiveId(null); }}
-      />
-    </div>
-  );
-}
-
-function HistoryPanel({
-  history, activeId, onSelect, onClear,
-}: {
-  history: HistoryEntry[];
-  activeId: string | null;
-  onSelect: (id: string) => void;
-  onClear: () => void;
-}) {
-  return (
-    <Card className="border-0 bg-gradient-card shadow-soft lg:sticky lg:top-20 lg:h-[calc(100vh-7rem)]">
-      <CardHeader className="flex-row items-center justify-between space-y-0 pb-3">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <History className="h-4 w-4 text-primary" /> History
-        </CardTitle>
-        {history.length > 0 && (
-          <Button variant="ghost" size="icon" onClick={onClear} aria-label="Clear history" className="h-8 w-8">
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        )}
-      </CardHeader>
-      <CardContent className="p-0">
-        <ScrollArea className="h-[420px] lg:h-[calc(100vh-11rem)]">
-          <div className="space-y-2 px-4 pb-4">
-            {history.length === 0 ? (
-              <p className="py-8 text-center text-sm text-muted-foreground">
-                No past questions yet.
+      {/* Right: Chat */}
+      <Card className="flex h-[calc(100vh-12rem)] min-h-[560px] flex-col overflow-hidden border-0 bg-gradient-card shadow-soft">
+        <div className="flex items-center justify-between border-b border-border/40 px-5 py-3">
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-primary shadow-glow">
+              <Sparkles className="h-4 w-4 text-primary-foreground" />
+            </div>
+            <div className="leading-tight">
+              <p className="text-sm font-semibold">AI Study Buddy</p>
+              <p className="text-xs text-muted-foreground">
+                {hasPdf ? `Asking about: ${uploadedPdf!.name}` : "Upload a PDF to ground answers"}
               </p>
-            ) : (
-              history.map((h) => (
-                <button
-                  key={h.id}
-                  onClick={() => onSelect(h.id)}
-                  className={`w-full rounded-xl border p-3 text-left transition-all hover:border-primary/50 hover:bg-background/70 ${
-                    activeId === h.id
-                      ? "border-primary/60 bg-background shadow-soft"
-                      : "border-border/40 bg-background/40"
-                  }`}
-                >
-                  <p className="line-clamp-2 text-sm font-medium">{h.question}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">{formatTime(h.createdAt)}</p>
-                </button>
-              ))
+            </div>
+          </div>
+          {messages.length > 0 && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setMessages([])}
+              aria-label="Clear chat"
+              className="h-8 w-8"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+
+        <ScrollArea className="flex-1" viewportRef={scrollRef}>
+          <div className="space-y-4 px-4 py-6 md:px-6">
+            {messages.length === 0 && !loading && (
+              <EmptyState hasPdf={hasPdf} onPick={(p) => send(p)} />
+            )}
+            {messages.map((m) => <Bubble key={m.id} message={m} />)}
+            {loading && <TypingBubble />}
+            {error && (
+              <div className="rounded-xl border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
+                {error}
+              </div>
             )}
           </div>
         </ScrollArea>
-      </CardContent>
-    </Card>
-  );
-}
 
-function LoadingCards() {
-  return (
-    <div className="grid gap-4 md:grid-cols-3">
-      {[0, 1, 2].map((i) => (
-        <Card key={i} className="overflow-hidden border-0 bg-gradient-card shadow-soft">
-          <CardContent className="flex h-40 flex-col items-center justify-center gap-3">
-            <div className="flex gap-1">
-              {[0, 1, 2].map((d) => (
-                <span
-                  key={d}
-                  className="h-3 w-3 animate-bounce rounded-full bg-primary"
-                  style={{ animationDelay: `${d * 0.15}s` }}
-                />
-              ))}
-            </div>
-            <p className="text-sm text-muted-foreground">Thinking…</p>
-          </CardContent>
-        </Card>
-      ))}
-    </div>
-  );
-}
+        {/* Quick actions */}
+        <div className="flex flex-wrap gap-2 border-t border-border/40 px-4 py-3 md:px-6">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={loading || !hasPdf}
+            onClick={() => send("Summarize this PDF in clear bullet points covering the key concepts and main takeaways.")}
+            className="rounded-full"
+          >
+            <BookOpen className="mr-2 h-4 w-4" />
+            Summarize PDF
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={loading || !hasPdf}
+            onClick={() => send("Generate a 5-question quiz from this PDF with answers. Mix multiple choice and short answer.")}
+            className="rounded-full"
+          >
+            <HelpCircle className="mr-2 h-4 w-4" />
+            Generate Quiz
+          </Button>
+          {!hasPdf && (
+            <span className="ml-1 self-center text-xs text-muted-foreground">
+              Upload a PDF to enable these
+            </span>
+          )}
+        </div>
 
-function ResultCards({ result }: { result: AIResult }) {
-  return (
-    <div className="grid gap-4 md:grid-cols-3">
-      <Card className="border-0 bg-gradient-card shadow-soft">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <BookOpen className="h-4 w-4 text-primary" /> Explanation
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="text-sm leading-relaxed text-foreground/90">
-          {result.explanation || result.raw || <em className="text-muted-foreground">No explanation returned.</em>}
-        </CardContent>
-      </Card>
-
-      <Card className="border-0 bg-gradient-card shadow-soft">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <FileText className="h-4 w-4 text-primary" /> Short Notes
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="text-[15px] leading-7">
-          {Array.isArray(result.notes) ? (
-            <ul className="list-disc space-y-2 rounded-xl bg-background/60 p-4 pl-6">
-              {result.notes.map((n, i) => <li key={i}>{n}</li>)}
-            </ul>
-          ) : result.notes ? (
-            <p
-              id="shortNotes"
-              className="rounded-xl bg-background/60 p-4 [white-space:pre-line]"
+        {/* Composer */}
+        <div className="border-t border-border/40 bg-background/40 p-3 md:p-4">
+          <div className="flex items-end gap-2">
+            <Textarea
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+              placeholder={hasPdf ? "Ask anything about your PDF…" : "Ask anything to start learning…"}
+              className="min-h-[52px] flex-1 resize-none rounded-2xl border-border/50 bg-background/80"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  send();
+                }
+              }}
+            />
+            <Button
+              onClick={() => send()}
+              disabled={!canSend}
+              className="h-12 rounded-full bg-gradient-primary px-5 shadow-glow hover:opacity-90"
+              aria-label="Send"
             >
-              {result.notes}
-            </p>
-          ) : (
-            <em className="text-muted-foreground">No notes returned.</em>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card className="border-0 bg-gradient-card shadow-soft">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <HelpCircle className="h-4 w-4 text-primary" /> Quiz
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3 text-sm">
-          {Array.isArray(result.quiz) ? (
-            result.quiz.map((q, i) => (
-              <div key={i} className="rounded-xl bg-background/50 p-3">
-                <p className="font-medium">Q{i + 1}. {q.question}</p>
-                {q.options && (
-                  <ul className="mt-1 space-y-0.5 text-muted-foreground">
-                    {q.options.map((o, j) => <li key={j}>• {o}</li>)}
-                  </ul>
-                )}
-                {q.answer && <p className="mt-1 text-xs text-primary">Answer: {q.answer}</p>}
-              </div>
-            ))
-          ) : result.quiz ? (
-            <p className="whitespace-pre-wrap">{result.quiz}</p>
-          ) : (
-            <em className="text-muted-foreground">No quiz returned.</em>
-          )}
-        </CardContent>
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            </Button>
+          </div>
+          <p className="mt-1.5 px-1 text-[11px] text-muted-foreground">
+            Enter to send · Shift + Enter for newline
+          </p>
+        </div>
       </Card>
     </div>
   );
 }
+
+function EmptyState({ hasPdf, onPick }: { hasPdf: boolean; onPick: (p: string) => void }) {
+  const samples = hasPdf
+    ? [
+        "Explain the main concepts in this PDF.",
+        "What are the most important formulas or definitions?",
+        "Quiz me on chapter 1.",
+      ]
+    : [
+        "Explain photosynthesis like I'm 12.",
+        "Give me 5 quick facts about the French Revolution.",
+        "What's the difference between mitosis and meiosis?",
+      ];
+  return (
+    <div className="mx-auto flex max-w-xl flex-col items-center gap-4 py-10 text-center">
+      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-primary shadow-glow">
+        <Sparkles className="h-6 w-6 text-primary-foreground" />
+      </div>
+      <div>
+        <h3 className="text-lg font-semibold">How can I help you study?</h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {hasPdf ? "Ask about your uploaded PDF or try a suggestion." : "Upload a PDF or try a quick prompt."}
+        </p>
+      </div>
+      <div className="grid w-full gap-2 sm:grid-cols-2">
+        {samples.map((s) => (
+          <button
+            key={s}
+            onClick={() => onPick(s)}
+            className="rounded-2xl border border-border/50 bg-background/60 p-3 text-left text-sm transition-all hover:border-primary/50 hover:bg-background"
+          >
+            {s}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Bubble({ message }: { message: Message }) {
+  const isUser = message.role === "user";
+  return (
+    <div className={`flex gap-3 ${isUser ? "flex-row-reverse" : "flex-row"}`}>
+      <div
+        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
+          isUser ? "bg-primary/15 text-primary" : "bg-gradient-primary text-primary-foreground shadow-glow"
+        }`}
+      >
+        {isUser ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
+      </div>
+      <div className={`max-w-[80%] ${isUser ? "items-end" : "items-start"} flex flex-col gap-1`}>
+        <div
+          className={`whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-soft ${
+            isUser
+              ? "rounded-tr-sm bg-gradient-primary text-primary-foreground"
+              : "rounded-tl-sm bg-background/80 text-foreground"
+          }`}
+        >
+          {message.content}
+        </div>
+        <span className="px-1 text-[11px] text-muted-foreground">{formatTime(message.createdAt)}</span>
+      </div>
+    </div>
+  );
+}
+
+function TypingBubble() {
+  return (
+    <div className="flex gap-3">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-primary text-primary-foreground shadow-glow">
+        <Bot className="h-4 w-4" />
+      </div>
+      <div className="rounded-2xl rounded-tl-sm bg-background/80 px-4 py-3 shadow-soft">
+        <div className="flex items-center gap-1">
+          {[0, 1, 2].map((i) => (
+            <span
+              key={i}
+              className="h-2 w-2 animate-bounce rounded-full bg-primary"
+              style={{ animationDelay: `${i * 0.15}s` }}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Keeping a no-op export footprint compatible with prior imports (none external).
+export type { Message };
+// Reference to silence unused-import warnings for icons reserved for future use.
+void FileText;
+void CardContent;
