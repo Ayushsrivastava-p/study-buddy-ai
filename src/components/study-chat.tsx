@@ -86,12 +86,15 @@ export function StudyChat() {
     setQuestion("");
 
     try {
+      const selectedFile = uploadedPdf?.file;
+      console.log(selectedFile);
+
       const formData = new FormData();
+      if (selectedFile) {
+        formData.append("file", selectedFile);
+      }
       formData.append("question", text);
       formData.append("sessionId", getSessionId());
-      if (uploadedPdf?.file) {
-        formData.append("file", uploadedPdf.file, uploadedPdf.file.name);
-      }
 
       const res = await fetch(API_URL, { method: "POST", body: formData });
       if (!res.ok) throw new Error(`Request failed: ${res.status}`);
