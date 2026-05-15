@@ -151,7 +151,7 @@ export function StudyChat() {
           )}
         </div>
 
-        <ScrollArea className="flex-1" viewportRef={scrollRef}>
+        <div ref={scrollRef} className="flex-1 overflow-y-auto">
           <div className="space-y-4 px-4 py-6 md:px-6">
             {messages.length === 0 && !loading && (
               <EmptyState hasPdf={hasPdf} onPick={(p) => send(p)} />
