@@ -5,7 +5,7 @@ import { Textarea } from "@/components/ui/textarea";
 
 import {
   Sparkles, FileText, HelpCircle, Send, Loader2,
-  Trash2, Bot, User, BookOpen,
+  Trash2, Bot, User, BookOpen, CheckCircle2, List,
 } from "lucide-react";
 import { getSessionId } from "@/lib/session";
 import { PdfUpload, type UploadedPdf } from "@/components/pdf-upload";
@@ -14,10 +14,21 @@ const API_URL = "https://shawl-tasting-rice.ngrok-free.dev/webhook/study-buddy";
 const STORAGE_KEY = "study-buddy-chat";
 
 type Role = "user" | "assistant";
+
+type QuizItem = {
+  question: string;
+  options: string[];
+  answer: string;
+};
+
 type Message = {
   id: string;
   role: Role;
-  content: string;
+  content?: string; // backward compatibility
+  response?: string;
+  type?: "quiz" | "explanation" | "summary" | "normal";
+  quiz?: QuizItem[];
+  short_notes?: string[];
   createdAt: number;
 };
 
@@ -26,9 +37,10 @@ function pickAnswer(data: unknown): string {
   if (Array.isArray(data)) return pickAnswer(data[0]);
   if (data && typeof data === "object") {
     const d = data as Record<string, unknown>;
+    // New API format: response field
+    if (typeof d.response === "string" && d.response.trim()) return d.response;
     return (
       (d.answer as string) ||
-      (d.response as string) ||
       (d.explanation as string) ||
       (d.text as string) ||
       (d.output as string) ||
@@ -39,6 +51,36 @@ function pickAnswer(data: unknown): string {
     );
   }
   return "";
+}
+
+function parseApiResponse(data: unknown): Partial<Omit<Message, "id" | "role" | "createdAt">> {
+  if (!data || typeof data !== "object") return { response: String(data) };
+  const d = data as Record<string, unknown>;
+
+  const response = typeof d.response === "string" ? d.response : pickAnswer(data);
+  const type = ["quiz", "explanation", "summary", "normal"].includes(d.type as string)
+    ? (d.type as Message["type"])
+    : "normal";
+
+  let quiz: QuizItem[] | undefined;
+  if (Array.isArray(d.quiz)) {
+    quiz = d.quiz.map((q: unknown) => {
+      if (!q || typeof q !== "object") return { question: "", options: [], answer: "" };
+      const item = q as Record<string, unknown>;
+      return {
+        question: String(item.question ?? ""),
+        options: Array.isArray(item.options) ? item.options.map(String) : [],
+        answer: String(item.answer ?? ""),
+      };
+    }).filter((q) => q.question);
+  }
+
+  let short_notes: string[] | undefined;
+  if (Array.isArray(d.short_notes)) {
+    short_notes = d.short_notes.map(String).filter(Boolean);
+  }
+
+  return { response, type, quiz, short_notes };
 }
 
 function formatTime(ts: number) {
@@ -117,12 +159,16 @@ export function StudyChat() {
       const raw = await res.text();
       let data: unknown = raw;
       try { data = JSON.parse(raw); } catch { /* keep string */ }
-      const answer = pickAnswer(data) || "(empty response)";
+
+      const parsed = parseApiResponse(data);
 
       setMessages((m) => [...m, {
         id: crypto.randomUUID(),
         role: "assistant",
-        content: answer,
+        response: parsed.response,
+        type: parsed.type,
+        quiz: parsed.quiz,
+        short_notes: parsed.short_notes,
         createdAt: Date.now(),
       }]);
     } catch (e) {
@@ -289,27 +335,110 @@ function EmptyState({ hasPdf, onPick }: { hasPdf: boolean; onPick: (p: string) =
 
 function Bubble({ message }: { message: Message }) {
   const isUser = message.role === "user";
-  return (
-    <div className={`flex gap-3 ${isUser ? "flex-row-reverse" : "flex-row"}`}>
-      <div
-        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
-          isUser ? "bg-primary/15 text-primary" : "bg-gradient-primary text-primary-foreground shadow-glow"
-        }`}
-      >
-        {isUser ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
-      </div>
-      <div className={`max-w-[80%] ${isUser ? "items-end" : "items-start"} flex flex-col gap-1`}>
-        <div
-          className={`whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-soft ${
-            isUser
-              ? "rounded-tr-sm bg-gradient-primary text-primary-foreground"
-              : "rounded-tl-sm bg-background/80 text-foreground"
-          }`}
-        >
-          {message.content}
+  const displayText = message.response || message.content || "";
+
+  if (isUser) {
+    return (
+      <div className="flex gap-3 flex-row-reverse">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
+          <User className="h-4 w-4" />
         </div>
+        <div className="max-w-[80%] items-end flex flex-col gap-1">
+          <div className="whitespace-pre-wrap rounded-2xl rounded-tr-sm bg-gradient-primary px-4 py-3 text-sm leading-relaxed shadow-soft text-primary-foreground">
+            {displayText}
+          </div>
+          <span className="px-1 text-[11px] text-muted-foreground">{formatTime(message.createdAt)}</span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex gap-3 flex-row">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-primary text-primary-foreground shadow-glow">
+        <Bot className="h-4 w-4" />
+      </div>
+      <div className="max-w-[80%] items-start flex flex-col gap-3">
+        <div className="whitespace-pre-wrap rounded-2xl rounded-tl-sm bg-background/80 px-4 py-3 text-sm leading-relaxed shadow-soft text-foreground">
+          {displayText}
+        </div>
+
+        {message.quiz && message.quiz.length > 0 && (
+          <div className="w-full space-y-3">
+            {message.quiz.map((q, idx) => (
+              <QuizCard key={idx} index={idx} quiz={q} />
+            ))}
+          </div>
+        )}
+
+        {message.short_notes && message.short_notes.length > 0 && (
+          <ShortNotes notes={message.short_notes} />
+        )}
+
         <span className="px-1 text-[11px] text-muted-foreground">{formatTime(message.createdAt)}</span>
       </div>
+    </div>
+  );
+}
+
+function QuizCard({ index, quiz }: { index: number; quiz: QuizItem }) {
+  return (
+    <div className="rounded-2xl border border-border/50 bg-background/60 p-4 shadow-soft">
+      <p className="mb-3 text-sm font-semibold text-foreground">
+        <span className="mr-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary/15 text-xs font-bold text-primary">
+          {index + 1}
+        </span>
+        {quiz.question}
+      </p>
+      <div className="grid gap-2">
+        {quiz.options.map((opt, i) => {
+          const isCorrect = opt === quiz.answer;
+          return (
+            <div
+              key={i}
+              className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm ${
+                isCorrect
+                  ? "border border-primary/40 bg-primary/10 font-medium text-primary"
+                  : "border border-border/40 bg-background/40 text-foreground"
+              }`}
+            >
+              {isCorrect ? (
+                <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />
+              ) : (
+                <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-muted-foreground/40 text-[10px] text-muted-foreground">
+                  {String.fromCharCode(65 + i)}
+                </span>
+              )}
+              <span>{opt}</span>
+            </div>
+          );
+        })}
+      </div>
+      {!quiz.options.some((o) => o === quiz.answer) && quiz.answer && (
+        <p className="mt-2 text-xs text-primary">
+          <CheckCircle2 className="mr-1 inline h-3 w-3" />
+          Correct answer: {quiz.answer}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function ShortNotes({ notes }: { notes: string[] }) {
+  return (
+    <div className="w-full rounded-2xl border border-border/50 bg-background/60 p-4 shadow-soft">
+      <div className="mb-2 flex items-center gap-2">
+        <List className="h-4 w-4 text-primary" />
+        <h4 className="text-sm font-semibold text-foreground">Short Notes</h4>
+      </div>
+      <ul className="space-y-1.5">
+        {notes.map((note, i) => (
+          <li key={i} className="flex gap-2 text-sm text-foreground">
+            <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+            <span>{note}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
